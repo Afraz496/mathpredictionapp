@@ -1,7 +1,6 @@
-# Live Math Grade Predictor QR Fix
+# Live Math Grade Predictor v2
 
-This version sets the default public URL to:
-https://afrazmathapp.streamlit.app
-
-That means the QR code now points to:
-https://afrazmathapp.streamlit.app?mode=vote
+Updates:
+- fixes mobile dropdown readability for the avocado selector
+- prediction now shows a letter grade (A/B/C/D/E)
+- underlying percentage is still available as a caption on the presenter view

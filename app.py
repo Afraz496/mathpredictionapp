@@ -52,6 +52,31 @@ h1,h2,h3,h4,h5,h6,p,label,div,span { color: #f8fafc; }
     border: 1px solid rgba(148,163,184,0.25) !important; border-radius: 12px !important;
 }
 .stSelectbox [data-baseweb="select"] * { color: #f8fafc !important; }
+
+/* Fix dropdown menu readability on mobile/light popovers */
+div[data-baseweb="popover"] {
+    background: #ffffff !important;
+    border-radius: 12px !important;
+}
+div[data-baseweb="popover"] * {
+    color: #0f172a !important;
+}
+div[role="listbox"] {
+    background: #ffffff !important;
+}
+div[role="option"] {
+    background: #ffffff !important;
+    color: #0f172a !important;
+}
+div[role="option"][aria-selected="true"] {
+    background: #dbeafe !important;
+    color: #0f172a !important;
+}
+li[role="option"] {
+    background: #ffffff !important;
+    color: #0f172a !important;
+}
+
 .stSlider label, .stSlider span, .stSlider div { color: #e2e8f0 !important; }
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #081124 0%, #0b1530 100%);
@@ -67,9 +92,6 @@ def get_conn():
     return conn
 
 def init_db():
-    current_public = get_setting("public_url", DEFAULT_PUBLIC_URL)
-    if current_public in ["https://your-app-name.streamlit.app", "", None]:
-        set_setting("public_url", DEFAULT_PUBLIC_URL)
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
@@ -83,7 +105,7 @@ def init_db():
             attendance_pct REAL NOT NULL,
             avocado_flag INTEGER NOT NULL,
             created_at TEXT NOT NULL
-        )   
+        )
     """)
     defaults = {
         "accepting_votes": "1",
@@ -168,6 +190,18 @@ def train_model():
     model.fit(X, math_grade)
     return model
 
+def numeric_to_letter(score: float) -> str:
+    if score >= 86:
+        return "A"
+    elif score >= 73:
+        return "B"
+    elif score >= 60:
+        return "C"
+    elif score >= 50:
+        return "D"
+    else:
+        return "E"
+
 def predict_from_consensus(votes_df):
     if votes_df.empty:
         return None, None, None
@@ -181,8 +215,9 @@ def predict_from_consensus(votes_df):
     model = train_model()
     X_new = pd.DataFrame([avg])
     pred = float(model.predict(X_new)[0])
+    letter = numeric_to_letter(pred)
     imp = pd.DataFrame({"feature": X_new.columns, "importance": model.feature_importances_}).sort_values("importance", ascending=False)
-    return pred, avg, imp
+    return pred, letter, avg, imp
 
 def make_qr_bytes(url: str):
     qr = qrcode.QRCode(box_size=9, border=1)
@@ -193,25 +228,27 @@ def make_qr_bytes(url: str):
     img.save(bio, format="PNG")
     return bio.getvalue()
 
-def grade_gauge(pred):
+def grade_gauge(pred, letter):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=pred,
-        number={"suffix": "%", "font": {"size": 42}},
+        number={"suffix": "%", "font": {"size": 34}},
+        title={"text": f"<span style='font-size:28px'><b>Letter grade: {letter}</b></span>"},
         gauge={
             "axis": {"range": [0, 100]},
             "bar": {"color": "#38bdf8"},
             "steps": [
-                {"range": [0, 60], "color": "rgba(239,68,68,0.25)"},
-                {"range": [60, 75], "color": "rgba(245,158,11,0.25)"},
-                {"range": [75, 90], "color": "rgba(34,197,94,0.25)"},
-                {"range": [90, 100], "color": "rgba(16,185,129,0.35)"},
+                {"range": [0, 50], "color": "rgba(239,68,68,0.25)"},
+                {"range": [50, 60], "color": "rgba(249,115,22,0.25)"},
+                {"range": [60, 73], "color": "rgba(245,158,11,0.25)"},
+                {"range": [73, 86], "color": "rgba(34,197,94,0.25)"},
+                {"range": [86, 100], "color": "rgba(16,185,129,0.35)"},
             ],
         }
     ))
-    fig.update_layout(template="plotly_dark", height=300, margin=dict(l=20, r=20, t=30, b=20),
+    fig.update_layout(template="plotly_dark", height=320, margin=dict(l=20, r=20, t=60, b=20),
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      font=dict(color="#f8fafc"), title="Predicted math grade")
+                      font=dict(color="#f8fafc"), title="Predicted math result")
     return fig
 
 def consensus_bar(avg_dict):
@@ -286,9 +323,9 @@ def render_dashboard():
                 set_setting("accepting_votes", "0")
                 st.rerun()
         if st.button("Run prediction", use_container_width=True):
-            pred, avg, _ = predict_from_consensus(votes_df)
+            pred, letter, avg, _ = predict_from_consensus(votes_df)
             if pred is not None:
-                payload = {"pred": round(pred, 1), "avg": avg, "created_at": datetime.utcnow().isoformat()}
+                payload = {"pred": round(pred, 1), "letter": letter, "avg": avg, "created_at": datetime.utcnow().isoformat()}
                 set_setting("last_prediction", json.dumps(payload))
                 set_setting("prediction_locked", "1")
                 set_setting("accepting_votes", "0")
@@ -311,7 +348,7 @@ def render_dashboard():
     cards = [
         ("Votes received", str(total_votes), "Audience submissions so far"),
         ("Voting", "Open" if accepting_votes else "Frozen", "Use freeze before revealing prediction"),
-        ("Predicted math grade", f'{pred_payload["pred"]:.1f}%' if pred_payload else "—", "Appears after prediction is run"),
+        ("Predicted grade", pred_payload["letter"] if pred_payload else "—", "Letter grade appears after prediction"),
         ("Avocado votes", str(int(votes_df["avocado_flag"].sum()) if not votes_df.empty else 0), "Because every good demo needs a weird feature"),
     ]
     for col, (a,b,c) in zip([m1,m2,m3,m4], cards):
@@ -336,7 +373,7 @@ def render_dashboard():
                 st.plotly_chart(consensus_bar(avg_live), use_container_width=True)
             with c2:
                 if pred_payload:
-                    _, _, imp_df = predict_from_consensus(votes_df)
+                    _, _, _, imp_df = predict_from_consensus(votes_df)
                     st.plotly_chart(feature_importance_chart(imp_df), use_container_width=True)
                 else:
                     st.markdown("### Prediction pending")
@@ -352,7 +389,7 @@ def render_dashboard():
             st.markdown('<div class="card" style="margin-top:16px;">', unsafe_allow_html=True)
             p1, p2 = st.columns([1.1, 1.2])
             with p1:
-                st.plotly_chart(grade_gauge(pred_payload["pred"]), use_container_width=True)
+                st.plotly_chart(grade_gauge(pred_payload["pred"], pred_payload["letter"]), use_container_width=True)
             with p2:
                 avg = pred_payload["avg"]
                 summary_df = pd.DataFrame({
@@ -365,8 +402,9 @@ def render_dashboard():
                         "Yes" if avg["avocado_flag"] >= 0.5 else "No",
                     ]
                 })
-                st.markdown("### Frozen class consensus")
+                st.markdown(f"### Frozen class consensus → **{pred_payload['letter']}**")
                 st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                st.caption(f"Underlying predicted percentage: {pred_payload['pred']:.1f}%")
             st.markdown('</div>', unsafe_allow_html=True)
 
     with right:
@@ -377,7 +415,7 @@ def render_dashboard():
         st.download_button("Download QR PNG", data=qr_bytes, file_name="math_grade_vote_qr.png", mime="image/png")
         st.markdown("---")
         st.markdown("### How this works")
-        st.markdown("- Students scan the code\n- They submit a feature profile\n- The dashboard updates live\n- You freeze submissions\n- The model predicts the math grade")
+        st.markdown("- Students scan the code\n- They submit a feature profile\n- The dashboard updates live\n- You freeze submissions\n- The model predicts a letter grade")
         st.markdown('</div>', unsafe_allow_html=True)
 
 init_db()
