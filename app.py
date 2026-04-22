@@ -67,6 +67,9 @@ def get_conn():
     return conn
 
 def init_db():
+    current_public = get_setting("public_url", DEFAULT_PUBLIC_URL)
+    if current_public in ["https://your-app-name.streamlit.app", "", None]:
+        set_setting("public_url", DEFAULT_PUBLIC_URL)
     conn = get_conn()
     cur = conn.cursor()
     cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
@@ -80,7 +83,7 @@ def init_db():
             attendance_pct REAL NOT NULL,
             avocado_flag INTEGER NOT NULL,
             created_at TEXT NOT NULL
-        )
+        )   
     """)
     defaults = {
         "accepting_votes": "1",
