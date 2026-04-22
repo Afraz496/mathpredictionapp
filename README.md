@@ -1,6 +1,6 @@
-# Live Math Grade Predictor v2
+# Live Math Grade Predictor v3
 
 Updates:
-- fixes mobile dropdown readability for the avocado selector
-- prediction now shows a letter grade (A/B/C/D/E)
-- underlying percentage is still available as a caption on the presenter view
+- replaces the avocado dropdown with a mobile-friendly Yes/No radio control
+- forces the vote button styling so it stays legible instead of going grey
+- keeps the letter-grade prediction output

@@ -43,38 +43,62 @@ h1,h2,h3,h4,h5,h6,p,label,div,span { color: #f8fafc; }
 .metric-value { color: #f8fafc; font-size: 2rem; font-weight: 800; line-height: 1.1; }
 .metric-sub { color: #9fb3d1; font-size: 0.9rem; margin-top: 6px; }
 .small-note { color: #dbeafe; font-size: 0.92rem; }
-.stButton button, .stDownloadButton button {
-    border-radius: 12px !important; border: none !important; font-weight: 700 !important;
-    color: white !important; background: linear-gradient(135deg, #0891b2, #2563eb) !important;
+
+/* Force buttons to stay readable on mobile/light-mode oddities */
+.stButton > button,
+.stDownloadButton > button,
+button[kind="primary"],
+button[kind="secondary"],
+div[data-testid="stFormSubmitButton"] > button,
+form button {
+    border-radius: 14px !important;
+    border: 1px solid rgba(125,211,252,0.22) !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb) !important;
+    box-shadow: 0 8px 22px rgba(37,99,235,0.25) !important;
+    opacity: 1 !important;
 }
+.stButton > button:hover,
+.stDownloadButton > button:hover,
+div[data-testid="stFormSubmitButton"] > button:hover,
+form button:hover {
+    filter: brightness(1.08) !important;
+    color: #ffffff !important;
+}
+.stButton > button:focus,
+.stDownloadButton > button:focus,
+div[data-testid="stFormSubmitButton"] > button:focus,
+form button:focus {
+    outline: 2px solid #7dd3fc !important;
+    outline-offset: 2px !important;
+    color: #ffffff !important;
+}
+.stButton > button:disabled,
+.stDownloadButton > button:disabled,
+div[data-testid="stFormSubmitButton"] > button:disabled,
+form button:disabled {
+    background: linear-gradient(135deg, #1e3a8a, #1d4ed8) !important;
+    color: #e2e8f0 !important;
+    opacity: 0.95 !important;
+}
+
 .stTextInput input, .stSelectbox [data-baseweb="select"] > div {
     background: rgba(15,23,42,0.94) !important; color: #f8fafc !important;
     border: 1px solid rgba(148,163,184,0.25) !important; border-radius: 12px !important;
 }
 .stSelectbox [data-baseweb="select"] * { color: #f8fafc !important; }
 
-/* Fix dropdown menu readability on mobile/light popovers */
-div[data-baseweb="popover"] {
-    background: #ffffff !important;
+/* Mobile-friendly radios instead of dropdown style issues */
+div[role="radiogroup"] label {
+    background: rgba(15,23,42,0.92) !important;
+    border: 1px solid rgba(148,163,184,0.20) !important;
     border-radius: 12px !important;
+    padding: 8px 14px !important;
+    margin-right: 8px !important;
 }
-div[data-baseweb="popover"] * {
-    color: #0f172a !important;
-}
-div[role="listbox"] {
-    background: #ffffff !important;
-}
-div[role="option"] {
-    background: #ffffff !important;
-    color: #0f172a !important;
-}
-div[role="option"][aria-selected="true"] {
-    background: #dbeafe !important;
-    color: #0f172a !important;
-}
-li[role="option"] {
-    background: #ffffff !important;
-    color: #0f172a !important;
+div[role="radiogroup"] * {
+    color: #f8fafc !important;
 }
 
 .stSlider label, .stSlider span, .stSlider div { color: #e2e8f0 !important; }
@@ -204,7 +228,7 @@ def numeric_to_letter(score: float) -> str:
 
 def predict_from_consensus(votes_df):
     if votes_df.empty:
-        return None, None, None
+        return None, None, None, None
     avg = {
         "study_hours": votes_df["study_hours"].mean(),
         "sleep_hours": votes_df["sleep_hours"].mean(),
@@ -264,7 +288,16 @@ def consensus_bar(avg_dict):
     return fig
 
 def feature_importance_chart(imp_df):
-    fig = go.Figure(go.Bar(x=imp_df["importance"], y=imp_df["feature"], orientation="h", marker=dict(color="#f59e0b")))
+    labels = {
+        "study_hours": "Study hrs/wk",
+        "sleep_hours": "Sleep hrs/night",
+        "homework_pct": "Homework %",
+        "attendance_pct": "Attendance %",
+        "avocado_flag": "Avocado"
+    }
+    d = imp_df.copy()
+    d["feature"] = d["feature"].map(labels).fillna(d["feature"])
+    fig = go.Figure(go.Bar(x=d["importance"], y=d["feature"], orientation="h", marker=dict(color="#f59e0b")))
     fig.update_layout(template="plotly_dark", height=320, margin=dict(l=20, r=20, t=30, b=20),
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       font=dict(color="#f8fafc"), title="What the model cares about")
@@ -289,8 +322,8 @@ def render_vote_page():
         sleep_hours = st.slider("Sleep hours per night", 4, 10, 7)
         homework_pct = st.slider("Homework completion (%)", 0, 100, 80)
         attendance_pct = st.slider("Attendance (%)", 50, 100, 90)
-        avocado = st.selectbox("Eats avocados?", ["No", "Yes"])
-        submitted = st.form_submit_button("Submit my vote")
+        avocado = st.radio("Eats avocados?", ["No", "Yes"], horizontal=True)
+        submitted = st.form_submit_button("Submit my vote", use_container_width=True)
     if submitted:
         add_vote(voter_name.strip(), study_hours, sleep_hours, homework_pct, attendance_pct, 1 if avocado == "Yes" else 0)
         st.success("Vote submitted. Look at the main dashboard to see it update.")
