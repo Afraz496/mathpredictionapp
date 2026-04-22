@@ -1,21 +1,7 @@
-# Live Math Grade Predictor
+# Live Math Grade Predictor QR Fix
 
-A Streamlit classroom demo with:
-- presenter dashboard
-- QR-code audience voting page
-- live shared votes
-- freeze-and-predict workflow
-- interactive charts and tables
+This version sets the default public URL to:
+https://afrazmathapp.streamlit.app
 
-Run:
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-Audience page:
-- same app with `?mode=vote`
-
-Note:
-- shared state is stored in a local SQLite file
-- this is ideal for a classroom demo
+That means the QR code now points to:
+https://afrazmathapp.streamlit.app?mode=vote

@@ -17,6 +17,7 @@ from streamlit_autorefresh import st_autorefresh
 APP_TITLE = "Live Math Grade Predictor"
 DB_PATH = Path("audience_state.db")
 SEED = 42
+DEFAULT_PUBLIC_URL = "https://afrazmathapp.streamlit.app"
 
 st.set_page_config(page_title=APP_TITLE, page_icon="📚", layout="wide")
 
@@ -85,7 +86,7 @@ def init_db():
         "accepting_votes": "1",
         "prediction_locked": "0",
         "last_prediction": "",
-        "public_url": "https://your-app-name.streamlit.app",
+        "public_url": DEFAULT_PUBLIC_URL,
     }
     for k, v in defaults.items():
         cur.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
@@ -148,13 +149,11 @@ def train_model():
     homework = rng.uniform(20, 100, size=n)
     attendance = rng.uniform(60, 100, size=n)
     avocado = rng.integers(0, 2, size=n)
-
     math_grade = (
         35 + 1.6 * study + 2.4 * sleep + 0.22 * homework + 0.20 * attendance + 1.5 * avocado
         - 0.22 * np.maximum(0, sleep - 8.5) ** 2 + rng.normal(0, 4.5, size=n)
     )
     math_grade = np.clip(math_grade, 35, 100)
-
     X = pd.DataFrame({
         "study_hours": study,
         "sleep_hours": sleep,
@@ -162,9 +161,8 @@ def train_model():
         "attendance_pct": attendance,
         "avocado_flag": avocado
     })
-    y = math_grade
     model = RandomForestRegressor(n_estimators=250, max_depth=8, random_state=SEED)
-    model.fit(X, y)
+    model.fit(X, math_grade)
     return model
 
 def predict_from_consensus(votes_df):
@@ -236,18 +234,15 @@ def feature_importance_chart(imp_df):
 def render_vote_page():
     st_autorefresh(interval=4000, limit=None, key="vote_refresh")
     accepting_votes = get_setting("accepting_votes", "1") == "1"
-
     st.markdown("""
     <div class="hero">
         <div style="font-size:2.1rem;font-weight:900;">📱 Audience Input Panel</div>
         <div class="small-note" style="margin-top:8px;">Vote on the student profile. Your choices feed into the live classroom dashboard.</div>
     </div>
     """, unsafe_allow_html=True)
-
     if not accepting_votes:
         st.warning("Voting is closed. Watch the main screen for the final prediction.")
         return
-
     with st.form("vote_form", clear_on_submit=True):
         voter_name = st.text_input("Your name or nickname", max_chars=30, placeholder="Optional")
         study_hours = st.slider("Hours studied per week", 0, 25, 10)
@@ -256,7 +251,6 @@ def render_vote_page():
         attendance_pct = st.slider("Attendance (%)", 50, 100, 90)
         avocado = st.selectbox("Eats avocados?", ["No", "Yes"])
         submitted = st.form_submit_button("Submit my vote")
-
     if submitted:
         add_vote(voter_name.strip(), study_hours, sleep_hours, homework_pct, attendance_pct, 1 if avocado == "Yes" else 0)
         st.success("Vote submitted. Look at the main dashboard to see it update.")
@@ -264,7 +258,6 @@ def render_vote_page():
 def render_dashboard():
     st_autorefresh(interval=3000, limit=None, key="dashboard_refresh")
     votes_df = load_votes()
-
     st.markdown("""
     <div class="hero">
         <div style="font-size:2.25rem;font-weight:900;">📚 Live Math Grade Predictor</div>
@@ -275,10 +268,9 @@ def render_dashboard():
     with st.sidebar:
         st.markdown("### Presenter controls")
         accepting_votes = get_setting("accepting_votes", "1") == "1"
-        public_url = st.text_input("Public app URL", value=get_setting("public_url"))
-        if public_url != get_setting("public_url"):
+        public_url = st.text_input("Public app URL", value=get_setting("public_url", DEFAULT_PUBLIC_URL))
+        if public_url != get_setting("public_url", DEFAULT_PUBLIC_URL):
             set_setting("public_url", public_url)
-
         st.markdown(f"Voting status: **{'OPEN' if accepting_votes else 'LOCKED'}**")
         c1, c2 = st.columns(2)
         with c1:
@@ -290,7 +282,6 @@ def render_dashboard():
             if st.button("Freeze voting", use_container_width=True):
                 set_setting("accepting_votes", "0")
                 st.rerun()
-
         if st.button("Run prediction", use_container_width=True):
             pred, avg, _ = predict_from_consensus(votes_df)
             if pred is not None:
@@ -299,14 +290,12 @@ def render_dashboard():
                 set_setting("prediction_locked", "1")
                 set_setting("accepting_votes", "0")
                 st.rerun()
-
         if st.button("Reset class session", use_container_width=True):
             reset_votes()
             st.rerun()
-
         st.caption("Project the dashboard and let students scan the QR code to vote.")
 
-    public_url = get_setting("public_url")
+    public_url = get_setting("public_url", DEFAULT_PUBLIC_URL).strip().rstrip("/")
     vote_url = public_url + ("&" if "?" in public_url else "?") + urlencode({"mode": "vote"})
     qr_bytes = make_qr_bytes(vote_url)
 
@@ -375,12 +364,6 @@ def render_dashboard():
                 })
                 st.markdown("### Frozen class consensus")
                 st.dataframe(summary_df, use_container_width=True, hide_index=True)
-                if pred_payload["pred"] >= 86:
-                    st.success("The model thinks this student is likely to score very highly.")
-                elif pred_payload["pred"] >= 72:
-                    st.warning("The model expects a decent result, but there is room to improve.")
-                else:
-                    st.error("The model sees risk. More study, sleep, homework, or attendance could help.")
             st.markdown('</div>', unsafe_allow_html=True)
 
     with right:
